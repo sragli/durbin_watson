@@ -64,7 +64,31 @@ DurbinWatson.interpret(d)
 DurbinWatson.interpret(d, lower: 1.8, upper: 2.2)
 ```
 
+### `DurbinWatson.residuals_from_series/1`
+
+Fits a simple OLS linear trend ($y = a + bt$) to a raw time series and returns
+the residuals (actual − predicted). Returns `{:ok, residuals}` or
+`{:error, reason}`.
+
+```elixir
+{:ok, residuals} = DurbinWatson.residuals_from_series([1.1, 2.3, 2.9, 4.2, 5.0])
+```
+
 ### End-to-end example
+
+Starting from a raw time series:
+
+```elixir
+series = [1.1, 2.3, 2.9, 4.2, 5.0]
+
+series
+|> DurbinWatson.residuals_from_series()
+|> then(fn {:ok, res} -> DurbinWatson.compute!(res) end)
+|> DurbinWatson.interpret()
+# => :no_autocorrelation
+```
+
+Or from residuals you already have:
 
 ```elixir
 residuals = [1, 2, 3, 4, 5]
@@ -73,7 +97,6 @@ residuals
 |> DurbinWatson.compute!()
 |> DurbinWatson.interpret()
 # => :positive_autocorrelation  (d ≈ 0.073)
-
 ```
 
 ## Error cases
@@ -81,4 +104,8 @@ residuals
 | Reason | Cause |
 |--------|-------|
 | `:insufficient_data` | List has fewer than 2 elements |
-| `:zero_denominator` | All residuals are zero |
+| `:zero_denominator` | All residuals are zero (only from `compute/1`) |
+
+## License
+
+MIT

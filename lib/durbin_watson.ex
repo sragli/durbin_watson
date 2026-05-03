@@ -98,4 +98,49 @@ defmodule DurbinWatson do
       true -> :no_autocorrelation
     end
   end
+
+  @doc """
+  Computes OLS residuals from a time series by fitting a simple linear trend
+  (y = a + b·t, where t = 1, 2, …, n) and returning `actual - predicted` for
+  each observation.
+
+  Returns `{:ok, residuals}` or `{:error, :insufficient_data}` when the series
+  has fewer than 2 points.
+
+  ## Examples
+
+      iex> {:ok, res} = DurbinWatson.residuals_from_series([2.0, 4.0, 6.0, 8.0])
+      iex> Enum.all?(res, fn r -> abs(r) < 1.0e-10 end)
+      true
+
+      iex> DurbinWatson.residuals_from_series([1])
+      {:error, :insufficient_data}
+
+  """
+  @spec residuals_from_series([number()]) :: {:ok, [float()]} | {:error, atom()}
+  def residuals_from_series(series) when is_list(series) and length(series) >= 2 do
+    n = length(series)
+    ts = Enum.map(1..n, & &1)
+
+    mean_t = Enum.sum(ts) / n
+    mean_y = Enum.sum(series) / n
+
+    {ss_tt, ss_ty} =
+      Enum.zip(ts, series)
+      |> Enum.reduce({0.0, 0.0}, fn {t, y}, {stt, sty} ->
+        dt = t - mean_t
+        {stt + dt * dt, sty + dt * (y - mean_y)}
+      end)
+
+    slope = ss_ty / ss_tt
+    intercept = mean_y - slope * mean_t
+
+    residuals =
+      Enum.zip(ts, series)
+      |> Enum.map(fn {t, y} -> y - (intercept + slope * t) end)
+
+    {:ok, residuals}
+  end
+
+  def residuals_from_series(_), do: {:error, :insufficient_data}
 end

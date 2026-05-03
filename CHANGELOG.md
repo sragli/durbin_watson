@@ -11,3 +11,6 @@
 - `DurbinWatson.interpret/2` — classifies the statistic as
   `:positive_autocorrelation`, `:no_autocorrelation`, or
   `:negative_autocorrelation` using configurable thresholds (default 1.5 / 2.5).
+- `DurbinWatson.residuals_from_series/1` — fits a simple OLS linear trend to a
+  raw time series and returns the residuals (actual − predicted), enabling a
+  fully integrated pipeline from raw data to autocorrelation test.
