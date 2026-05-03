@@ -157,5 +157,60 @@ defmodule DurbinWatsonTest do
       assert {:ok, d} = DurbinWatson.compute(res)
       assert is_float(d)
     end
+
+    test "produces the same residuals as residuals_from_series_general_ols/1" do
+      series = [1.1, 2.3, 2.9, 4.2, 5.0, 6.3, 5.8]
+      {:ok, res_closed} = DurbinWatson.residuals_from_series(series)
+      {:ok, res_general} = DurbinWatson.residuals_from_series_general_ols(series)
+      Enum.zip(res_closed, res_general)
+      |> Enum.each(fn {a, b} -> assert_in_delta a, b, 1.0e-10 end)
+    end
+  end
+
+  describe "residuals_from_series_general_ols/1" do
+    test "perfectly linear series produces near-zero residuals" do
+      {:ok, res} = DurbinWatson.residuals_from_series_general_ols([2.0, 4.0, 6.0, 8.0])
+      assert Enum.all?(res, fn r -> abs(r) < 1.0e-10 end)
+    end
+
+    test "returns a list of the same length as the input" do
+      {:ok, res} = DurbinWatson.residuals_from_series_general_ols([1, 3, 2, 5, 4])
+      assert length(res) == 5
+    end
+
+    test "residuals sum to (approximately) zero" do
+      {:ok, res} = DurbinWatson.residuals_from_series_general_ols([1, 3, 2, 5, 4])
+      assert_in_delta Enum.sum(res), 0.0, 1.0e-10
+    end
+
+    test "constant series produces zero residuals" do
+      {:ok, res} = DurbinWatson.residuals_from_series_general_ols([7, 7, 7, 7, 7])
+      assert Enum.all?(res, fn r -> abs(r) < 1.0e-10 end)
+    end
+
+    test "works with two elements (minimum valid input)" do
+      assert {:ok, [r1, r2]} = DurbinWatson.residuals_from_series_general_ols([1.0, 3.0])
+      assert_in_delta r1, 0.0, 1.0e-10
+      assert_in_delta r2, 0.0, 1.0e-10
+    end
+
+    test "returns :insufficient_data for a single element" do
+      assert DurbinWatson.residuals_from_series_general_ols([1]) == {:error, :insufficient_data}
+    end
+
+    test "returns :insufficient_data for an empty list" do
+      assert DurbinWatson.residuals_from_series_general_ols([]) == {:error, :insufficient_data}
+    end
+
+    test "returns :insufficient_data for non-list input" do
+      assert DurbinWatson.residuals_from_series_general_ols(42) == {:error, :insufficient_data}
+    end
+
+    test "can be piped directly into compute/1" do
+      series = [1.1, 2.3, 2.9, 4.2, 5.0]
+      assert {:ok, res} = DurbinWatson.residuals_from_series_general_ols(series)
+      assert {:ok, d} = DurbinWatson.compute(res)
+      assert is_float(d)
+    end
   end
 end

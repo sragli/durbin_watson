@@ -65,8 +65,12 @@ mix deps.get
 
 ### `DurbinWatson.residuals_from_series/1`
 
-If you have a raw time series and no pre-computed residuals, this function fits a simple OLS linear trend ($y = a + bt$, where $t = 1, 2, \ldots, n$) and
-returns the residuals (actual − predicted).
+Fits the model $x_t = \beta_0 + \beta_1 t + \epsilon_t$ ($t = 1, 2, \ldots, n$) using
+closed-form OLS estimators and returns the residuals $\hat{\epsilon}_t = x_t - (\hat{\beta}_0 + \hat{\beta}_1 t)$.
+
+$$\hat{\beta}_1 = \frac{\sum t \cdot x_t - n\bar{t}\bar{x}}{n(n^2-1)/12}, \qquad \hat{\beta}_0 = \bar{x} - \hat{\beta}_1 \bar{t}$$
+
+The denominator $\frac{n(n^2-1)}{12}$ is the closed-form value of $\sum(t-\bar{t})^2$ for the integer sequence $1 \ldots n$.
 
 ```elixir
 series = [2.1, 4.3, 5.9, 8.2, 10.1]
@@ -75,6 +79,18 @@ series = [2.1, 4.3, 5.9, 8.2, 10.1]
 ```
 
 Use this as the first step when you want to test a raw series for autocorrelation and do not have a separate regression model.
+
+### `DurbinWatson.residuals_from_series_general_ols/1`
+
+Mathematically equivalent to `residuals_from_series/1`, but uses the general two-pass OLS formula — explicitly accumulating $\sum(t-\bar{t})^2$ and
+$\sum(t-\bar{t})(x_t-\bar{x})$ rather than the closed-form denominator.
+
+```elixir
+{:ok, residuals} = DurbinWatson.residuals_from_series_general_ols(series)
+```
+
+Prefer `residuals_from_series/1` for normal use. This variant is useful as a reference implementation or a starting point when adapting the code to
+non-unit or irregular time steps.
 
 ### `DurbinWatson.compute/1`
 

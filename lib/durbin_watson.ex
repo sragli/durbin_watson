@@ -100,9 +100,19 @@ defmodule DurbinWatson do
   end
 
   @doc """
-  Computes OLS residuals from a time series by fitting a simple linear trend
-  (y = a + b·t, where t = 1, 2, …, n) and returning `actual - predicted` for
-  each observation.
+  Computes OLS residuals from a time series by fitting the linear model
+
+      xₜ = β₀ + β₁·t + ϵₜ,  t = 1, 2, …, n
+
+  and returning `ϵₜ = xₜ - (β₀ + β₁·t)` for each observation.
+
+  The OLS estimators are:
+
+      β₁ = (Σ t·xₜ  -  n·t̄·x̄) / (n(n²-1)/12)
+      β₀ = x̄ - β₁·t̄
+
+  where `t̄ = (n+1)/2` and the denominator uses the closed-form value of
+  `Σ(t - t̄)²` for the integer sequence `1..n`.
 
   Returns `{:ok, residuals}` or `{:error, :insufficient_data}` when the series
   has fewer than 2 points.
@@ -120,27 +130,79 @@ defmodule DurbinWatson do
   @spec residuals_from_series([number()]) :: {:ok, [float()]} | {:error, atom()}
   def residuals_from_series(series) when is_list(series) and length(series) >= 2 do
     n = length(series)
-    ts = Enum.map(1..n, & &1)
 
-    mean_t = Enum.sum(ts) / n
-    mean_y = Enum.sum(series) / n
+    # t̄ = (n+1)/2 for t = 1..n
+    mean_t = (n + 1) / 2.0
+    mean_x = Enum.sum(series) / n
 
-    {ss_tt, ss_ty} =
-      Enum.zip(ts, series)
-      |> Enum.reduce({0.0, 0.0}, fn {t, y}, {stt, sty} ->
-        dt = t - mean_t
-        {stt + dt * dt, sty + dt * (y - mean_y)}
-      end)
+    # Σ t·xₜ in a single pass using 1-based index
+    sum_tx =
+      series
+      |> Enum.with_index(1)
+      |> Enum.reduce(0.0, fn {x, t}, acc -> acc + t * x end)
 
-    slope = ss_ty / ss_tt
-    intercept = mean_y - slope * mean_t
+    # Closed-form Σ(t - t̄)² = n(n²-1)/12 for t = 1..n
+    ss_tt = n * (n * n - 1) / 12.0
+
+    beta1 = (sum_tx - n * mean_t * mean_x) / ss_tt
+    beta0 = mean_x - beta1 * mean_t
 
     residuals =
-      Enum.zip(ts, series)
-      |> Enum.map(fn {t, y} -> y - (intercept + slope * t) end)
+      series
+      |> Enum.with_index(1)
+      |> Enum.map(fn {x, t} -> x - (beta0 + beta1 * t) end)
 
     {:ok, residuals}
   end
 
   def residuals_from_series(_), do: {:error, :insufficient_data}
+
+  @doc """
+  Computes OLS residuals by fitting `xₜ = β₀ + β₁·t + ϵₜ` using the general
+  two-pass OLS formula — explicitly accumulating `Σ(t - t̄)²` and `Σ(t - t̄)(xₜ - x̄)`
+  rather than relying on the closed-form denominator `n(n²-1)/12`.
+
+  Mathematically equivalent to `residuals_from_series/1` for integer time steps
+  `t = 1..n`. Prefer `residuals_from_series/1` for normal use; this variant is
+  useful as a reference or when adapting the code to non-unit time steps.
+
+  Returns `{:ok, residuals}` or `{:error, :insufficient_data}` when the series
+  has fewer than 2 points.
+
+  ## Examples
+
+      iex> {:ok, res} = DurbinWatson.residuals_from_series_general_ols([2.0, 4.0, 6.0, 8.0])
+      iex> Enum.all?(res, fn r -> abs(r) < 1.0e-10 end)
+      true
+
+      iex> DurbinWatson.residuals_from_series_general_ols([1])
+      {:error, :insufficient_data}
+
+  """
+  @spec residuals_from_series_general_ols([number()]) :: {:ok, [float()]} | {:error, atom()}
+  def residuals_from_series_general_ols(series) when is_list(series) and length(series) >= 2 do
+    n = length(series)
+    ts = Enum.map(1..n, & &1)
+
+    mean_t = Enum.sum(ts) / n
+    mean_x = Enum.sum(series) / n
+
+    {ss_tt, ss_tx} =
+      Enum.zip(ts, series)
+      |> Enum.reduce({0.0, 0.0}, fn {t, x}, {stt, stx} ->
+        dt = t - mean_t
+        {stt + dt * dt, stx + dt * (x - mean_x)}
+      end)
+
+    beta1 = ss_tx / ss_tt
+    beta0 = mean_x - beta1 * mean_t
+
+    residuals =
+      Enum.zip(ts, series)
+      |> Enum.map(fn {t, x} -> x - (beta0 + beta1 * t) end)
+
+    {:ok, residuals}
+  end
+
+  def residuals_from_series_general_ols(_), do: {:error, :insufficient_data}
 end
